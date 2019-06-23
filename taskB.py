@@ -35,9 +35,11 @@ def ioa(df):
     denom = ((abs(df.iloc[:, 0] - mean2) + abs(df.iloc[:, 1] - mean2)) ** 2).sum()
     return round(1 - (nom / denom), 4)
 
+
 def pearson_corr(df):
     # pearson correlation coefficient
     return round(df.iloc[:, 0].corr(df.iloc[:, 1]), 4)
+
 
 def calc_metrics(df, index_name=''):
     """pd.DataFrame: first col is model, second col is satellite data set"""
@@ -144,6 +146,7 @@ def evaluate_model(datapath, outpath, cell):
     fname = 'cell_{}_{}.png'.format(cell, site)
     plt.savefig(os.path.join(outpath, fname))
     plt.close()
+
 
 if __name__ == '__main__':
     rootpath = os.path.dirname(os.path.realpath(__file__))
