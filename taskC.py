@@ -2,6 +2,7 @@
 # Created by tobias at 23.06.19
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 from taskB import nrmse, pearson_corr, normalize_df
 from exercise03 import read_data
 
@@ -63,7 +64,15 @@ if __name__ == '__main__':
     cell = '32785'
 
     pars_set = ['pars{}'.format(i) for i in range(1, 51)]
-    for pars in pars_set[:1]:
+
+    parameters = read_data(os.path.join(datapath, 'LPJmL', 'cell_32785_parameter-sets.txt'))
+    print(parameters)
+
+    metric_sets = {}
+    param_sets = {}
+    for i, pars in enumerate(pars_set):
+        print()
+        i += 1
         fapar_comb = read_fapar(cellpath, satpath, pars, cell)
         fapar_metrics = calc_metrics(fapar_comb, 'FAPAR')
         sif_comb = read_sif(cellpath, satpath, pars, cell)
@@ -71,7 +80,35 @@ if __name__ == '__main__':
         ssm_comb = read_swc(cellpath, satpath, pars, cell)
         ssm_metrics = calc_metrics(ssm_comb, 'SSM')
         metric_results = pd.concat([fapar_metrics, sif_metrics, ssm_metrics])
-        print(metric_results)
+
+        # store metrics and params per run
+        metric_sets[i] = metric_results.unstack()
+        param_sets[i] = parameters.loc[pars]
+
+    # to df
+    par_set_metrics = pd.DataFrame.from_dict(metric_sets).T
+    print(par_set_metrics)
+
+    par_set_params = pd.DataFrame.from_dict(param_sets).T
+    print(par_set_params)
+
+    # plot
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(12,8))
+    par_set_metrics[['NRMSE']].plot(ax=ax1)
+    par_set_metrics[['Corr']].plot(ax=ax2)
+    par_set_params['WATER_BASE'].plot(ax=ax3)
+    par_set_params['EMAX'].plot(ax=ax4)
+
+    # labeling
+    ax1.set_title('Parameter optimisation')
+    ax1.set_ylabel('NRMSE (-)')
+    ax1.legend(loc='upper right')
+    ax2.set_ylabel('Pearson R (-)')
+    ax2.legend(loc='upper right')
+    ax3.set_ylabel('WATER_BASE (%)')
+    ax4.set_ylabel('EMAX ($mm day^{-1}$)')
 
 
-
+    plt.xlabel('Model run')
+    plt.tight_layout()
+    plt.savefig(os.path.join(outpath, '1_model_params_vs_performance.png'))
