@@ -64,7 +64,7 @@ def plot_vars(vars_cell, outpath, save=False):
     plt.close()
 
 
-def calc_annually(lpjmlpath, outpath, cell, save=False):
+def calc_annually(lpjmlpath, cell, title=None, out_path=None):
     '''
     Compute annual GPP and net biome productivity (NBP)
     NPB = NPP - Fire - Rh
@@ -76,13 +76,60 @@ def calc_annually(lpjmlpath, outpath, cell, save=False):
     mrh = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_mrh.txt'.format(cell)))
     mgpp = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_mgpp.txt'.format(cell)))
     vegc = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_vegc.txt'.format(cell)))
+    vegc = vegc.asfreq('YS')
     fpc = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_fpc.txt'.format(cell)))
     vars_cell = pd.concat([mnpp, mfirec, mrh, mgpp], axis=1, sort=True)
     vars_cell['mnbp'] = vars_cell['mnpp'] - vars_cell['mfirec'] - vars_cell['mrh']
     vars_cell_yearly = vars_cell.resample('YS').sum()
-    max_tree = fpc[["fpc TrBE", "fpc TrBR", "fpc TeNE", "fpc TeBE", "fpc TeBS", "fpc BoNE", "fpc BoBS", "fpc BoNS"]].idxmax(axis=1)
-    max_grass = fpc[["fpc TrH", "fpc TeH"]].idxmax(axis=1)
-    print(max_tree, max_grass)
+
+
+    fpc_trees = fpc[["fpc TrBE", "fpc TrBR", "fpc TeNE", "fpc TeBE", "fpc TeBS", "fpc BoNE", "fpc BoBS", "fpc BoNS"]].asfreq('YS')
+    dominant_tree_class = fpc_trees.mean(axis=0).sort_values(ascending=False).index[0]
+    fpc_dominant_tree_ts = fpc_trees[dominant_tree_class]
+
+    fpc_grass = fpc[["fpc TrH", "fpc TeH"]].asfreq('YS')
+    dominant_grass_class = fpc_grass.mean(axis=0).sort_values(ascending=False).index[0]
+    fpc_dominant_grass_ts = fpc_grass[dominant_grass_class]
+
+    yearly_data = pd.concat([vars_cell_yearly, fpc_dominant_tree_ts, fpc_dominant_grass_ts, vegc], axis=1)
+    yearly_data = yearly_data.drop(columns=['mnpp', 'mfirec', 'mrh'], axis=1)
+    yearly_data = yearly_data.rename(columns={'mgpp': 'gpp', 'mnbp': 'nbp'})
+
+
+    # calculate correlations
+    corrs = yearly_data.corr()
+
+    #vars_cell_yearly.plot(subplots=True)
+    axes = yearly_data.plot(subplots=True, figsize=(12, 8))
+
+    # ['mgpp', 'mnbp', 'fpc TeBE', 'fpc TeH', 'vegc']
+
+    unit_dict = {'gpp' : '$gC m^{-2} yr^{-1}$',
+                 'nbp' : '$gC m^{-2} yr^{-1}$',
+                 'vegc': '$gC m^{-2} yr^{-1}$'}
+
+    for ax in axes:
+        handles, labels = ax.get_legend_handles_labels()
+        ax_label = labels[0]
+
+        if 'fpc' in ax_label:
+            unit = '%'
+        else:
+            unit = unit_dict[ax_label]
+
+        ax.set_ylabel('({})'.format(unit))
+
+    if title is not None:
+        axes[0].set_title(title)
+
+    plt.tight_layout()
+
+    if outpath is None:
+        print(corrs)
+        plt.show()
+    else:
+        corrs.to_csv(os.path.join(outpath, 'annual_corrs_cell_{}.csv'.format(cell)))
+        plt.savefig(os.path.join(outpath, 'annual_cell_{}.png'.format(cell)))
 
 
 if __name__ == '__main__':
@@ -93,10 +140,22 @@ if __name__ == '__main__':
         os.makedirs(outpath)
     except:
         pass
+
+
+    site_dict = {'32785': 'Sahel (23.75°E, 7.75°N), cropland area: 11%',
+                 '6037': 'Mexico (105.25°W, 28.75°N), cropland area: 85%',
+                 '7460': 'Canada (99.25°W, 52.25°N), cropland area: 0.3%',
+                 '25368': 'Spain (3.25°W, 39.75°N), cropland area: 77%',
+                 '53569': 'Taymyr (102.25°E, 75.75°N), cropland area: 0%'}
+
+
     cells = ['6037', '7460', '25368', '32785', '53569']
     vars_cells = {}
-    for cell in cells[:1]:
+    for cell in cells:
         vars_cells[cell] = calc_variables(lpjmlpath, outpath, cell, False)
         vars_cells[cell].name = cell
+
+        # get plot title for cell
+        cell_title = site_dict[cell]
         # plot_vars(vars_cells[cell], outpath, True)
-        calc_annually(lpjmlpath, outpath, cell, False)
+        calc_annually(lpjmlpath, cell, cell_title, outpath)
