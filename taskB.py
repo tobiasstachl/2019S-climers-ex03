@@ -69,6 +69,7 @@ def evaluate_model(datapath, outpath, cell):
     mfapar = mfapar.rename(columns={'mfapar': 'LPJmL-FAPAR'})#.fillna(0.0)
     fapar_sat = read_data(os.path.join(satpath, 'MOD15A2H.FPAR.forLPJcells.2000.2018.30days.txt'))
     fapar_sat_cell = fapar_sat[cell].rename('MODIS-FAPAR')#.fillna(0.0)
+
     index_min = max([mfapar.index.min(), fapar_sat_cell.index.min()])
     index_max = min([mfapar.index.max(), fapar_sat_cell.index.max()])
     fapar_comb = pd.concat([mfapar, fapar_sat_cell], axis=1, sort=True).loc[index_min:index_max]
@@ -81,13 +82,20 @@ def evaluate_model(datapath, outpath, cell):
     # norm to evaluate temporal dynamic of GPP?
     mgpp = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_mgpp.txt'.format(cell)))
     mgpp = mgpp.rename(columns={'mgpp': 'LPJmL-GPP'})#.fillna(0.0)
-    mgpp_norm = normalize_df(mgpp)
     sif = read_data(os.path.join(satpath, 'GlobFluo-GOME2.SIF.forLPJcells.2007.2015.30days.txt'))
     sif_cell = sif[cell].rename('SIF')#.fillna(0.0)
-    sif_cell_norm = normalize_df(sif_cell)
+
+    # clip to common date range
     index_min = max([mgpp.index.min(), sif_cell.index.min()])
     index_max = min([mgpp.index.max(), sif_cell.index.max()])
-    gpp_sif = pd.concat([mgpp_norm, sif_cell_norm], axis=1, sort=True).loc[index_min:index_max]
+    sif_cell = sif_cell.loc[index_min:index_max]
+    mgpp = mgpp.loc[index_min:index_max]
+
+    # min-max normalization
+    mgpp_norm = normalize_df(mgpp)
+    sif_cell_norm = normalize_df(sif_cell)
+
+    gpp_sif = pd.concat([mgpp_norm, sif_cell_norm], axis=1, sort=True)
 
     # metrics
     gpp_sif_metrics = calc_metrics(gpp_sif, 'GPP-SIF')
@@ -98,11 +106,18 @@ def evaluate_model(datapath, outpath, cell):
     mswc = mswc.rename(columns={'mswc1': 'LPJmL-SWC'})#.fillna(0.0)
     ssm = read_data(os.path.join(satpath, 'ESACCIv050.SSM.forLPJcells.1978.2017.30days.txt'))
     ssm = ssm[cell].rename('ESACCISM')#.fillna(0.0)
-    ssm_norm = normalize_df(ssm)
-    mswc_norm = normalize_df(mswc)
+
+    # clip to common date range
     index_min = max([ssm.index.min(), mswc.index.min()])
     index_max = min([ssm.index.max(), mswc.index.max()])
-    ssm_comb = pd.concat([mswc_norm, ssm_norm], axis=1, sort=True).loc[index_min:index_max]
+    mswc = mswc.loc[index_min:index_max]
+    ssm = ssm.loc[index_min:index_max]
+
+    # min-max normalization
+    ssm_norm = normalize_df(ssm)
+    mswc_norm = normalize_df(mswc)
+
+    ssm_comb = pd.concat([mswc_norm, ssm_norm], axis=1, sort=True)
 
     # metrics
     ssm_metrics = calc_metrics(ssm_comb, 'SSM')
@@ -111,7 +126,6 @@ def evaluate_model(datapath, outpath, cell):
     # -------------------------------------------------------------------------
     metric_results = pd.concat([fapar_metrics, gpp_sif_metrics, ssm_metrics])
     metric_results.to_csv(os.path.join(outpath, 'metrics_cell_{}.csv'.format(cell)))
-    print(metric_results)
 
     # create plot
     # -------------------------------------------------------------------------
