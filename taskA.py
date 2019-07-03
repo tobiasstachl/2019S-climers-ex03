@@ -14,7 +14,7 @@ def calc_variables(lpjmlpath, outpath, cell, save=False):
     mfapar = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_mfapar.txt'.format(cell)))
     mswc = read_data(os.path.join(lpjmlpath, 'cell_{}'.format(cell), '{}_mswc1.txt'.format(cell)))
     vars_cell = pd.concat([mevap, mtransp, mnpp, mrh, mgpp, mfapar, mswc], axis=1, sort=True)
-    vars_cell['met'] = vars_cell[['mevap', 'mtransp']].sum(axis=1)
+    vars_cell['met'] = vars_cell[['mevap', 'mtransp', 'minterc']].sum(axis=1)
     vars_cell['mnee'] = vars_cell['mrh'] - vars_cell['mnpp']
 
     if save:
@@ -157,5 +157,5 @@ if __name__ == '__main__':
 
         # get plot title for cell
         cell_title = site_dict[cell]
-        # plot_vars(vars_cells[cell], outpath, True)
+        plot_vars(vars_cells[cell], outpath, True)
         calc_annually(lpjmlpath, cell, cell_title, outpath)

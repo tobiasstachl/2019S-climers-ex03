@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # Created by tobias at 23.06.19
 import os
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+from error_metrics import KGE
 from taskB import nrmse, pearson_corr, normalize_df
 from exercise03 import read_data
 
@@ -50,22 +53,15 @@ def read_swc(cellpath, satpath, pars, cell):
     return ssm_comb
 
 
-if __name__ == '__main__':
-    rootpath = os.path.dirname(os.path.realpath(__file__))
-    outpath = os.path.join(rootpath, 'results', 'taskC')
-    datapath = os.path.join(rootpath, 'data')
-    cellpath = os.path.join(datapath, 'LPJmL', 'cell_32785')
-    satpath = os.path.join(datapath, 'Satellite')
-    try:
-        os.makedirs(outpath)
-    except:
-        pass
-
+def model_params_vs_performance_plot():
+    """
+    The initial plot that matthias critized.
+    """
     cell = '32785'
-
     pars_set = ['pars{}'.format(i) for i in range(1, 51)]
 
-    parameters = read_data(os.path.join(datapath, 'LPJmL', 'cell_32785_parameter-sets.txt'))
+    parameters = read_data(
+        os.path.join(datapath, 'LPJmL', 'cell_32785_parameter-sets.txt'))
     print(parameters)
 
     metric_sets = {}
@@ -93,7 +89,8 @@ if __name__ == '__main__':
     print(par_set_params)
 
     # plot
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(12,8))
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True,
+                                             figsize=(12, 8))
     par_set_metrics[['NRMSE']].plot(ax=ax1)
     par_set_metrics[['Corr']].plot(ax=ax2)
     par_set_params['WATER_BASE'].plot(ax=ax3)
@@ -108,7 +105,100 @@ if __name__ == '__main__':
     ax3.set_ylabel('WATER_BASE (%)')
     ax4.set_ylabel('EMAX ($mm day^{-1}$)')
 
-
     plt.xlabel('Model run')
     plt.tight_layout()
     plt.savefig(os.path.join(outpath, '1_model_params_vs_performance.png'))
+    plt.close(fig)
+
+
+def kge_scatterplot():
+    """
+    Creates a scatterplot of WATER_BASE vs. EMAX parameters with the hue
+    given by the Kling-Gupta efficiency (KGE).
+
+    KGE is calculated only based on sim and obs FAPAR as we saw that the
+    agreement for SSM and SIF-GPP are quite good regardless of the
+    parameter settings.
+
+    Kling-Gupta efficiencies range from -Inf to 1.
+    Essentially, the closer to 1, the more accurate the model is.
+    """
+
+    cell = '32785'
+    pars_set = ['pars{}'.format(i) for i in range(1, 51)]
+
+    parameters = read_data(
+        os.path.join(datapath, 'LPJmL', 'cell_32785_parameter-sets.txt'))
+
+    metric_sets = {'kge': [],
+                   'cc': [],
+                   'alpha': [],
+                   'beta': []}
+    param_sets = {}
+    for i, pars in enumerate(pars_set):
+        i += 1
+        fapar_comb = read_fapar(cellpath, satpath, pars, cell)
+        fapar_sim = fapar_comb['mfapar'].values
+        fapar_obs = fapar_comb['MODIS-FAPAR'].values
+
+        # calc KGE for each parameter set
+        kge, cc, alpha, beta = KGE(s=fapar_sim, o=fapar_obs)
+
+        # store metrics and params per run
+        metric_sets['kge'].append(kge)
+        metric_sets['cc'].append(cc)
+        metric_sets['alpha'].append(alpha)
+        metric_sets['beta'].append(beta)
+        param_sets[i] = parameters.loc[pars]
+
+    # to df
+    par_set_metrics = pd.DataFrame.from_dict(metric_sets)
+    # reindex to start from 1
+    par_set_metrics.index = np.arange(1, len(par_set_metrics) + 1)
+    par_set_params = pd.DataFrame.from_dict(param_sets).T
+
+    # merge -> output could be given to plot function from here on
+    df_merged = pd.concat([par_set_params, par_set_metrics], axis=1)
+    sorted_by_kge = df_merged.sort_values('kge', ascending=False)
+    sorted_by_kge.to_csv(os.path.join(outpath,
+                                      'metrics_for_param_settings.csv'))
+
+    # plot
+    fig, ax = plt.subplots(figsize=(12,5))
+    x = 'WATER_BASE'
+    y = 'EMAX'
+    sns.scatterplot(x=x,
+                         y=y,
+                         size='cc',
+                         hue='kge',
+                         data=df_merged,
+                    ax=ax,
+                    legend='brief')
+
+    # annotate setting number
+    for i, txt in enumerate(df_merged.index.values):
+        ax.annotate(txt, (df_merged[x].iloc[i], df_merged[y].iloc[i]),
+                    color='grey')
+
+    # Put a legend to the right of the current axis
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+    plt.title('Optimisation of model parameters via KGE')
+    plt.xlabel('WATER_BASE (%)')
+    plt.ylabel('EMAX ($mm day^{-1}$)')
+    plt.tight_layout()
+    plt.savefig(os.path.join(outpath, '2_kge_scatterplot.png'))
+    plt.close(fig)
+
+if __name__ == '__main__':
+    rootpath = os.path.dirname(os.path.realpath(__file__))
+    outpath = os.path.join(rootpath, 'results', 'taskC')
+    datapath = os.path.join(rootpath, 'data')
+    cellpath = os.path.join(datapath, 'LPJmL', 'cell_32785')
+    satpath = os.path.join(datapath, 'Satellite')
+    try:
+        os.makedirs(outpath)
+    except:
+        pass
+
+    kge_scatterplot()
